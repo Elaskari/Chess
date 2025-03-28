@@ -1,0 +1,1801 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة شطرنج ضد الكمبيوتر</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f5f5f5;
+            padding: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .chess-board {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            border: 3px solid #333;
+            margin-bottom: 20px;
+        }
+        
+        .square {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .white {
+            background-color: #f0d9b5;
+        }
+        
+        .black {
+            background-color: #b58863;
+        }
+        
+        .selected {
+            background-color: #a9a9a9 !important;
+            box-shadow: inset 0 0 10px #000;
+        }
+        
+        .possible-move {
+            background-color: rgba(0, 255, 0, 0.3);
+        }
+        
+        .info {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .controls {
+            margin-top: 10px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>لعبة شطرنج ضد الكمبيوتر</h1>
+    
+    <div class="info" id="info">دور الأبيض</div>
+    
+    <div class="chess-board" id="chessBoard"></div>
+    
+    <div class="controls">
+        <button id="resetBtn">إعادة اللعبة</button>
+    </div>
+
+    <script>
+        // رموز قطع الشطرنج
+        const pieces = {
+            'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙',
+            'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟'
+        };
+
+        // لوحة الشطرنج الأولية
+        let board = [
+            ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+        ];
+
+        let selectedSquare = null;
+        let currentPlayer = 'white'; // الأبيض يبدأ أولاً
+        const chessBoard = document.getElementById('chessBoard');
+        const infoDisplay = document.getElementById('info');
+
+        // إنشاء لوحة الشطرنج
+        function createBoard() {
+            chessBoard.innerHTML = '';
+            
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(row + col) % 2 === 0 ? 'white' : 'black'}`;
+                    square.dataset.row = row;
+                    square.dataset.col = col;
+                    
+                    if (board[row][col] !== '') {
+                        square.textContent = pieces[board[row][col]];
+                    }
+                    
+                    square.addEventListener('click', () => handleSquareClick(row, col));
+                    chessBoard.appendChild(square);
+                }
+            }
+            
+            infoDisplay.textContent = `دور ${currentPlayer === 'white' ? 'الأبيض' : 'الأسود'}`;
+        }
+
+        // التعامل مع النقر على المربع
+        function handleSquareClick(row, col) {
+            // إذا كان دور الأسود، لا نسمح للاعب بالتحرك
+            if (currentPlayer === 'black') return;
+            
+            // إذا لم يكن هناك مربع محدد، ونقرنا على قطعة للاعب الحالي
+            if (!selectedSquare && board[row][col] !== '' && 
+                ((currentPlayer === 'white' && board[row][col] === board[row][col].toUpperCase()) || 
+                 (currentPlayer === 'black' && board[row][col] === board[row][col].toLowerCase()))) {
+                selectedSquare = { row, col };
+                highlightSquare(row, col);
+                showPossibleMoves(row, col);
+            } 
+            // إذا كان هناك مربع محدد، ونقرنا على قطعة أخرى للاعب الحالي
+            else if (selectedSquare && board[row][col] !== '' && 
+                     ((currentPlayer === 'white' && board[row][col] === board[row][col].toUpperCase()) || 
+                      (currentPlayer === 'black' && board[row][col] === board[row][col].toLowerCase()))) {
+                clearHighlights();
+                selectedSquare = { row, col };
+                highlightSquare(row, col);
+                showPossibleMoves(row, col);
+            }
+            // إذا كان هناك مربع محدد، ونقرنا على حركة محتملة
+            else if (selectedSquare && document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`).classList.contains('possible-move')) {
+                movePiece(selectedSquare.row, selectedSquare.col, row, col);
+                clearHighlights();
+                selectedSquare = null;
+                
+                // بعد حركة اللاعب، ننتقل لحركة الكمبيوتر
+                if (currentPlayer === 'white') {
+                    currentPlayer = 'black';
+                    infoDisplay.textContent = 'الكمبيوتر يفكر...';
+                    setTimeout(makeAIMove, 1000);
+                } else {
+                    currentPlayer = 'white';
+                    infoDisplay.textContent = 'دور الأبيض';
+                }
+            }
+            // إلغاء التحديد إذا نقرنا على أي مكان آخر
+            else {
+                clearHighlights();
+                selectedSquare = null;
+            }
+        }
+
+        // تحريك القطعة
+        function movePiece(fromRow, fromCol, toRow, toCol) {
+            board[toRow][toCol] = board[fromRow][fromCol];
+            board[fromRow][fromCol] = '';
+            createBoard();
+        }
+
+        // الذكاء الاصطناعي للكمبيوتر (حركة عشوائية)
+        function makeAIMove() {
+            const possibleMoves = [];
+            
+            // جمع جميع الحركات الممكنة للأسود
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const piece = board[row][col];
+                    if (piece !== '' && piece === piece.toLowerCase()) { // قطع الأسود فقط
+                        const moves = getPossibleMovesForPiece(row, col, false);
+                        moves.forEach(move => {
+                            possibleMoves.push({
+                                from: { row, col },
+                                to: move
+                            });
+                        });
+                    }
+                }
+            }
+            
+            // اختيار حركة عشوائية
+            if (possibleMoves.length > 0) {
+                const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                movePiece(randomMove.from.row, randomMove.from.col, randomMove.to.row, randomMove.to.col);
+                currentPlayer = 'white';
+                infoDisplay.textContent = 'دور الأبيض';
+            } else {
+                // لا توجد حركات ممكنة (كش مات أو تعادل)
+                infoDisplay.textContent = currentPlayer === 'white' ? 'فوز الأسود!' : 'فوز الأبيض!';
+            }
+        }
+
+        // الحصول على الحركات الممكنة لقطعة معينة
+        function getPossibleMovesForPiece(row, col, isWhite) {
+            const piece = board[row][col].toLowerCase();
+            const moves = [];
+            
+            if (piece === 'p') { // بيادق
+                const direction = isWhite ? -1 : 1;
+                const startRow = isWhite ? 6 : 1;
+                
+                // حركة واحدة للأمام
+                if (isValidSquare(row + direction, col) && board[row + direction][col] === '') {
+                    moves.push({ row: row + direction, col: col });
+                    
+                    // حركتان للأمام من المربع الأول
+                    if (row === startRow && board[row + 2 * direction][col] === '') {
+                        moves.push({ row: row + 2 * direction, col: col });
+                    }
+                }
+                
+                // الأكل قطرياً
+                const captureDirections = [[direction, -1], [direction, 1]];
+                for (const [dr, dc] of captureDirections) {
+                    const newRow = row + dr;
+                    const newCol = col + dc;
+                    
+                    if (isValidSquare(newRow, newCol) && board[newRow][newCol] !== '' && 
+                        ((isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) || 
+                         (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                        moves.push({ row: newRow, col: newCol });
+                    }
+                }
+            } 
+            else if (piece === 'n') { // حصان
+                const knightMoves = [
+                    [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+                    [1, -2], [1, 2], [2, -1], [2, 1]
+                ];
+                
+                for (const [dr, dc] of knightMoves) {
+                    const newRow = row + dr;
+                    const newCol = col + dc;
+                    
+                    if (isValidSquare(newRow, newCol) && 
+                        (board[newRow][newCol] === '' || 
+                         (isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) || 
+                         (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                        moves.push({ row: newRow, col: newCol });
+                    }
+                }
+            }
+            else if (piece === 'b') { // فيل
+                const bishopDirections = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+                checkSlidingMoves(row, col, bishopDirections, moves, isWhite);
+            }
+            else if (piece === 'r') { // قلعة
+                const rookDirections = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+                checkSlidingMoves(row, col, rookDirections, moves, isWhite);
+            }
+            else if (piece === 'q') { // وزير
+                const queenDirections = [
+                    [-1, -1], [-1, 1], [1, -1], [1, 1],
+                    [-1, 0], [1, 0], [0, -1], [0, 1]
+                ];
+                checkSlidingMoves(row, col, queenDirections, moves, isWhite);
+            }
+            else if (piece === 'k') { // ملك
+                const kingMoves = [
+                    [-1, -1], [-1, 0], [-1, 1],
+                    [0, -1],           [0, 1],
+                    [1, -1],  [1, 0],  [1, 1]
+                ];
+                
+                for (const [dr, dc] of kingMoves) {
+                    const newRow = row + dr;
+                    const newCol = col + dc;
+                    
+                    if (isValidSquare(newRow, newCol) && 
+                        (board[newRow][newCol] === '' || 
+                         (isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) || 
+                         (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                        moves.push({ row: newRow, col: newCol });
+                    }
+                }
+            }
+            
+            return moves;
+        }
+
+        // التحقق من الحركات المنزلقة
+        function checkSlidingMoves(row, col, directions, moves, isWhite) {
+            for (const [dr, dc] of directions) {
+                let newRow = row + dr;
+                let newCol = col + dc;
+                
+                while (isValidSquare(newRow, newCol)) {
+                    if (board[newRow][newCol] === '') {
+                        moves.push({ row: newRow, col: newCol });
+                    } else {
+                        if ((isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) || 
+                            (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase())) {
+                            moves.push({ row: newRow, col: newCol });
+                        }
+                        break;
+                    }
+                    
+                    newRow += dr;
+                    newCol += dc;
+                }
+            }
+        }
+
+        // التحقق من أن المربع ضمن حدود اللوحة
+        function isValidSquare(row, col) {
+            return row >= 0 && row < 8 && col >= 0 && col < 8;
+        }
+
+        // إظهار الحركات الممكنة
+        function showPossibleMoves(row, col) {
+            const piece = board[row][col];
+            const isWhite = piece === piece.toUpperCase();
+            const moves = getPossibleMovesForPiece(row, col, isWhite);
+            
+            for (const move of moves) {
+                const square = document.querySelector(`.square[data-row="${move.row}"][data-col="${move.col}"]`);
+                if (square) {
+                    square.classList.add('possible-move');
+                }
+            }
+        }
+
+        // تمييز المربع المحدد
+        function highlightSquare(row, col) {
+            const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+            if (square) {
+                square.classList.add('selected');
+            }
+        }
+
+        // مسح التمييز
+        function clearHighlights() {
+            document.querySelectorAll('.selected, .possible-move').forEach(el => {
+                el.classList.remove('selected', 'possible-move');
+            });
+        }
+
+        // إعادة اللعبة
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            board = [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+            ];
+            selectedSquare = null;
+            currentPlayer = 'white';
+            createBoard();
+        });
+
+        // بدء اللعبة
+        createBoard();
+    </script>
+</body>
+</html><!DOCTYPE html >
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>شطرنج متكاملة مع الذكاء الاصطناعي</title>
+    <style>
+        body {
+    font-family: 'Arial', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background-color: #f5f5f5;
+    padding: 20px;
+    }
+        h1 {
+    color: #333;
+    margin-bottom: 20px;
+    }
+        .chess-container {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    }
+        .chess-board {
+    display: grid;
+    grid-template-columns: repeat(8, 60px);
+    grid-template-rows: repeat(8, 60px);
+    border: 3px solid #333;
+    }
+        .square {
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 40px;
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    }
+        .white {
+    background-color: #f0d9b5;
+    }
+        .black {
+    background-color: #b58863;
+    }
+        .selected {
+    background-color: #a9a9a9;
+    box-shadow: inset 0 0 10px #000;
+    }
+        .possible-move {
+    background-color: rgba(0, 255, 0, 0.3);
+    }
+        .capture-move::after {
+    content: '';
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    border: 3px solid rgba(255, 0, 0, 0.5);
+    border-radius: 50%;
+    }
+        .check {
+    background-color: rgba(255, 0, 0, 0.5) !important;
+    }
+        .promotion-choice {
+    position: absolute;
+    background-color: white;
+    border: 1px solid #333;
+    z-index: 100;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 5px;
+    }
+        .promotion-piece {
+    font-size: 30px;
+    cursor: pointer;
+    padding: 5px;
+    background-color: #f0f0f0;
+    }
+        .promotion-piece:hover {
+    background-color: #ddd;
+    }
+        .info-panel {
+    background-color: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    width: 250px;
+    }
+        .info {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    }
+        .move-history {
+    height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 5px;
+    margin-bottom: 10px;
+    }
+        .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    }
+        button {
+    padding: 8px 16px;
+    font-size: 16px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    }
+        button:hover {
+    background-color: #45a049;
+    }
+        .ai-thinking {
+    display: none;
+    font-style: italic;
+    color: #666;
+    }
+        .settings {
+    margin-top: 10px;
+    }
+        select {
+    padding: 5px;
+    font-size: 14px;
+    }
+</style>
+</head>
+<body>
+    <h1>شطرنج متكاملة مع الذكاء الاصطناعي</h1>
+    <div class="chess-container">
+        <div class="chess-board" id="chessBoard"></div>
+        <div class="info-panel">
+            <div class="info" id="info">
+دور الأبيض
+</div>
+            <div class="move-history" id="moveHistory"></div>
+            <div class="ai-thinking" id="aiThinking">
+الذكاء الاصطناعي يفكر...
+</div>
+            <div class="controls">
+                <button id="resetBtn">إعادة اللعبة</button>
+                <button id="undoBtn">تراجع عن الحركة</button>
+                <div class="settings">
+                    <label for="aiLevel">قوة الذكاء الاصطناعي:</label>
+                    <select id="aiLevel">
+                        <option value="1">سهل</option>
+                        <option value="2" selected>متوسط</option>
+                        <option value="3">صعب</option>
+                    </select>
+    </div>
+</div>
+</div>
+</div>
+
+    <script>
+        // رموز قطع الشطرنج
+        const pieces = {
+    'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', 'P': '♙',
+    'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚', 'p': '♟'
+    };
+
+        // لوحة الشطرنج الأولية
+        let board = [
+            ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+        ];
+
+        // حالة اللعبة
+        let gameState = {
+    selectedSquare: null,
+    currentPlayer: 'white',
+    moveHistory: [],
+    kingPos: {
+        white: {
+            row: 7,
+            col: 4
+        },
+        black: {
+            row: 0,
+            col: 4
+        }
+    },
+    canCastle: {
+        white: {
+            kingside: true,
+            queenside: true
+        },
+        black: {
+            kingside: true,
+            queenside: true
+        }
+    },
+    enPassantTarget: null,
+    halfMoveClock: 0,
+    fullMoveNumber: 1,
+    check: false,
+    checkmate: false,
+    stalemate: false,
+    promotionPending: false,
+    promotionSquare: null
+    };
+
+        // عناصر DOM
+        const chessBoard = document.getElementById('chessBoard');
+        const infoDisplay = document.getElementById('info');
+        const moveHistoryDisplay = document.getElementById('moveHistory');
+        const aiThinkingDisplay = document.getElementById('aiThinking');
+        const aiLevelSelect = document.getElementById('aiLevel');
+
+        // إنشاء لوحة الشطرنج
+        function createBoard() {
+    chessBoard.innerHTML = '';
+
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const square = document.createElement('div');
+            square.className = `square ${(row + col) % 2 === 0 ? 'white': 'black'}`;
+            square.dataset.row = row;
+            square.dataset.col = col;
+
+            if (board[row][col] !== '') {
+                square.textContent = pieces[board[row][col]];
+            }
+
+            // تمييز الملك إذا كان في كش
+            if ((row === gameState.kingPos.white.row && col === gameState.kingPos.white.col && gameState.check && gameState.currentPlayer === 'white') ||
+                (row === gameState.kingPos.black.row && col === gameState.kingPos.black.col && gameState.check && gameState.currentPlayer === 'black')) {
+                square.classList.add('check');
+            }
+
+            square.addEventListener('click', () => handleSquareClick(row, col));
+            chessBoard.appendChild(square);
+        }
+    }
+
+    updateGameInfo();
+    }
+
+        // التعامل مع النقر على المربع
+        function handleSquareClick(row, col) {
+    if (gameState.promotionPending) return;
+
+    const piece = board[row][col];
+
+    // إذا كان هناك ترقية معلقة، لا تقبل أي حركات أخرى
+    if (gameState.promotionPending) {
+        return;
+    }
+
+    // إذا لم يكن هناك مربع محدد، ونقرنا على قطعة للاعب الحالي
+    if (!gameState.selectedSquare && piece !== '' && isCurrentPlayerPiece(piece)) {
+        gameState.selectedSquare = {
+            row,
+            col
+        };
+        highlightSquare(row, col, true);
+        showPossibleMoves(row, col);
+    }
+    // إذا كان هناك مربع محدد، ونقرنا على قطعة أخرى للاعب الحالي
+    else if (gameState.selectedSquare && piece !== '' && isCurrentPlayerPiece(piece)) {
+        clearHighlights();
+        gameState.selectedSquare = {
+            row,
+            col
+        };
+        highlightSquare(row, col, true);
+        showPossibleMoves(row, col);
+    }
+    // إذا كان هناك مربع محدد، ونقرنا على حركة محتملة
+    else if (gameState.selectedSquare && document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`).classList.contains('possible-move')) {
+        const fromRow = gameState.selectedSquare.row;
+        const fromCol = gameState.selectedSquare.col;
+
+        // التحقق إذا كانت حركة التبييت
+        if (board[fromRow][fromCol].toLowerCase() === 'k' && Math.abs(col - fromCol) === 2) {
+            performCastling(fromRow, fromCol, row, col);
+        } else {
+            movePiece(fromRow, fromCol, row, col);
+        }
+
+        clearHighlights();
+        gameState.selectedSquare = null;
+
+        // إذا كانت حركة ترقية بيادق
+        if ((row === 0 || row === 7) && board[row][col].toLowerCase() === 'p') {
+            gameState.promotionPending = true;
+            gameState.promotionSquare = {
+                row,
+                col
+            };
+            showPromotionOptions(row, col);
+            return;
+        }
+
+        nextTurn();
+    }
+    // إلغاء التحديد إذا نقرنا على أي مكان آخر
+    else {
+        clearHighlights();
+        gameState.selectedSquare = null;
+    }
+    }
+
+        // تحريك القطعة
+        function movePiece(fromRow, fromCol, toRow, toCol) {
+    const piece = board[fromRow][fromCol];
+    const capturedPiece = board[toRow][toCol];
+
+    // تسجيل الحركة في التاريخ
+    const moveNotation = getMoveNotation(fromRow, fromCol, toRow, toCol, capturedPiece !== '');
+    gameState.moveHistory.push({
+        player: gameState.currentPlayer,
+        from: {
+            row: fromRow, col: fromCol
+        },
+        to: {
+            row: toRow, col: toCol
+        },
+        piece: piece,
+        captured: capturedPiece,
+        notation: moveNotation,
+        castle: false,
+        enPassant: false,
+        promotion: false
+    });
+
+    // الأخذ بالتجاوز
+    if (piece.toLowerCase() === 'p' && gameState.enPassantTarget &&
+        toRow === gameState.enPassantTarget.row && toCol === gameState.enPassantTarget.col) {
+        const capturedPawnRow = gameState.currentPlayer === 'white' ? toRow + 1: toRow - 1;
+        board[capturedPawnRow][toCol] = '';
+        gameState.moveHistory[gameState.moveHistory.length - 1].enPassant = true;
+        gameState.moveHistory[gameState.moveHistory.length - 1].captured = 'p';
+    }
+
+    // تحريك القطعة
+    board[toRow][toCol] = piece;
+    board[fromRow][fromCol] = '';
+
+    // تحديث موضع الملك
+    if (piece.toLowerCase() === 'k') {
+        if (gameState.currentPlayer === 'white') {
+            gameState.kingPos.white = {
+                row: toRow,
+                col: toCol
+            };
+        } else {
+            gameState.kingPos.black = {
+                row: toRow,
+                col: toCol
+            };
+        }
+
+        // إلغاء إمكانية التبييت بعد تحريك الملك
+        gameState.canCastle[gameState.currentPlayer].kingside = false;
+        gameState.canCastle[gameState.currentPlayer].queenside = false;
+    }
+
+    // إلغاء إمكانية التبييت بعد تحريك القلعة
+    if (piece.toLowerCase() === 'r') {
+        if (gameState.currentPlayer === 'white') {
+            if (fromRow === 7 && fromCol === 0) gameState.canCastle.white.queenside = false;
+            if (fromRow === 7 && fromCol === 7) gameState.canCastle.white.kingside = false;
+        } else {
+            if (fromRow === 0 && fromCol === 0) gameState.canCastle.black.queenside = false;
+            if (fromRow === 0 && fromCol === 7) gameState.canCastle.black.kingside = false;
+        }
+    }
+
+    // تحديد هدف الأخذ بالتجاوز للحركة القادمة
+    gameState.enPassantTarget = null;
+    if (piece.toLowerCase() === 'p' && Math.abs(toRow - fromRow) === 2) {
+        gameState.enPassantTarget = {
+            row: gameState.currentPlayer === 'white' ? toRow + 1: toRow - 1,
+            col: toCol
+        };
+    }
+
+    // زيادة عداد الحركات
+    gameState.halfMoveClock = (piece.toLowerCase() === 'p' || capturedPiece !== '') ? 0: gameState.halfMoveClock + 1;
+    if (gameState.currentPlayer === 'black') {
+        gameState.fullMoveNumber++;
+    }
+
+    // تحديث اللوحة
+    createBoard();
+    }
+
+        // تنفيذ التبييت
+        function performCastling(fromRow, fromCol, toRow, toCol) {
+    const piece = board[fromRow][fromCol];
+    const isKingside = toCol > fromCol;
+
+    // تحريك الملك
+    board[toRow][toCol] = piece;
+    board[fromRow][fromCol] = '';
+
+    // تحريك القلعة
+    if (isKingside) {
+        board[toRow][toCol - 1] = board[toRow][7];
+        board[toRow][7] = '';
+    } else {
+        board[toRow][toCol + 1] = board[toRow][0];
+        board[toRow][0] = '';
+    }
+
+    // تحديث موضع الملك
+    if (gameState.currentPlayer === 'white') {
+        gameState.kingPos.white = {
+            row: toRow,
+            col: toCol
+        };
+    } else {
+        gameState.kingPos.black = {
+            row: toRow,
+            col: toCol
+        };
+    }
+
+    // تسجيل الحركة في التاريخ
+    const castleNotation = isKingside ? 'O-O': 'O-O-O';
+    gameState.moveHistory.push({
+        player: gameState.currentPlayer,
+        from: {
+            row: fromRow, col: fromCol
+        },
+        to: {
+            row: toRow, col: toCol
+        },
+        piece: piece,
+        captured: '',
+        notation: castleNotation,
+        castle: true,
+        enPassant: false,
+        promotion: false
+    });
+
+    // إلغاء إمكانية التبييت بعد تنفيذه
+    gameState.canCastle[gameState.currentPlayer].kingside = false;
+    gameState.canCastle[gameState.currentPlayer].queenside = false;
+
+    // زيادة عداد الحركات
+    gameState.halfMoveClock++;
+    if (gameState.currentPlayer === 'black') {
+        gameState.fullMoveNumber++;
+    }
+
+    // تحديث اللوحة
+    createBoard();
+    }
+
+        // إظهار خيارات الترقية
+        function showPromotionOptions(row, col) {
+    const promotionPieces = gameState.currentPlayer === 'white' ?
+    ['Q', 'R', 'B', 'N']: ['q', 'r', 'b', 'n'];
+
+    const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+    const promotionDiv = document.createElement('div');
+    promotionDiv.className = 'promotion-choice';
+
+    promotionPieces.forEach(piece => {
+        const pieceDiv = document.createElement('div');
+        pieceDiv.className = 'promotion-piece';
+        pieceDiv.textContent = pieces[piece];
+        pieceDiv.dataset.piece = piece;
+        pieceDiv.addEventListener('click', () => handlePromotionChoice(piece));
+        promotionDiv.appendChild(pieceDiv);
+    });
+
+    square.appendChild(promotionDiv);
+    }
+
+        // التعامل مع اختيار الترقية
+        function handlePromotionChoice(piece) {
+    const row = gameState.promotionSquare.row;
+    const col = gameState.promotionSquare.col;
+
+    // تنفيذ الترقية
+    board[row][col] = piece;
+
+    // تحديث سجل الحركات
+    gameState.moveHistory[gameState.moveHistory.length - 1].promotion = true;
+    gameState.moveHistory[gameState.moveHistory.length - 1].notation += '=' + piece.toUpperCase();
+
+    // إعادة تعيين حالة الترقية
+    gameState.promotionPending = false;
+    gameState.promotionSquare = null;
+
+    // تنظيف خيارات الترقية
+    document.querySelectorAll('.promotion-choice').forEach(el => el.remove());
+
+    nextTurn();
+    }
+
+        // الانتقال للدور التالي
+        function nextTurn() {
+    // التحقق من كش ملك
+    const opponent = gameState.currentPlayer === 'white' ? 'black': 'white';
+    gameState.check = isKingInCheck(opponent);
+
+    // التحقق من كش مات أو التعادل
+    if (isCheckmate(opponent)) {
+        gameState.checkmate = true;
+        infoDisplay.textContent = `كش مات! فوز ${gameState.currentPlayer === 'white' ? 'الأبيض': 'الأسود'}`;
+        return;
+    } else if (isStalemate(opponent)) {
+        gameState.stalemate = true;
+        infoDisplay.textContent = 'تعادل!';
+        return;
+    }
+
+    // تبديل اللاعب
+    gameState.currentPlayer = opponent;
+
+    // تحديث معلومات اللعبة
+    updateGameInfo();
+    updateMoveHistory();
+
+    // إذا كان دور الذكاء الاصطناعي
+    if (gameState.currentPlayer === 'black' && !gameState.checkmate && !gameState.stalemate) {
+        makeAIMove();
+    }
+    }
+
+        // جعل الذكاء الاصطناعي يتحرك
+        function makeAIMove() {
+    aiThinkingDisplay.style.display = 'block';
+
+    // استخدام setTimeout للسماح بواجهة المستخدم بالتحديث قبل بدء التفكير
+    setTimeout(() => {
+        const move = findBestMove(parseInt(aiLevelSelect.value));
+
+        if (move) {
+            // إذا كانت حركة تبييت
+            if (move.castle) {
+                performCastling(move.from.row, move.from.col, move.to.row, move.to.col);
+            }
+            // إذا كانت حركة عادية
+            else {
+                movePiece(move.from.row, move.from.col, move.to.row, move.to.col);
+
+                // إذا كانت ترقية
+                if ((move.to.row === 0 || move.to.row === 7) &&
+                    board[move.to.row][move.to.col].toLowerCase() === 'p') {
+                    // الذكاء الاصطناعي يختار الترقية إلى وزير دائماً
+                    const promotionPiece = gameState.currentPlayer === 'white' ? 'Q': 'q';
+                    board[move.to.row][move.to.col] = promotionPiece;
+                    gameState.moveHistory[gameState.moveHistory.length - 1].promotion = true;
+                    gameState.moveHistory[gameState.moveHistory.length - 1].notation += '=' + promotionPiece.toUpperCase();
+                }
+            }
+
+            nextTurn();
+        }
+
+        aiThinkingDisplay.style.display = 'none';
+    }, 100);
+    }
+
+        // إيجاد أفضل حركة للذكاء الاصطناعي
+        function findBestMove(depth = 1) {
+    const possibleMoves = getAllPossibleMoves('black');
+
+    // إذا لم توجد حركات ممكنة (كش مات أو تعادل)
+    if (possibleMoves.length === 0) return null;
+
+    // ترتيب الحركات عشوائياً للتنوع
+    possibleMoves.sort(() => Math.random() - 0.5);
+
+    // المستوى السهل: اختيار عشوائي
+    if (depth === 1) {
+        return possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+    }
+
+    // المستويات الأعلى: تقييم الحركات
+    let bestMove = null;
+    let bestValue = -Infinity;
+
+    for (const move of possibleMoves) {
+        // تنفيذ الحركة مؤقتاً
+        const originalBoard = JSON.parse(JSON.stringify(board));
+        const originalState = JSON.parse(JSON.stringify(gameState));
+
+        if (move.castle) {
+            // تنفيذ التبييت مؤقتاً
+            board[move.to.row][move.to.col] = board[move.from.row][move.from.col];
+            board[move.from.row][move.from.col] = '';
+
+            if (move.to.col > move.from.col) {
+                // تبييت قصير
+                board[move.to.row][move.to.col - 1] = board[move.to.row][7];
+                board[move.to.row][7] = '';
+            } else {
+                // تبييت طويل
+                board[move.to.row][move.to.col + 1] = board[move.to.row][0];
+                board[move.to.row][0] = '';
+            }
+        } else {
+            // تنفيذ الحركة العادية مؤقتاً
+            board[move.to.row][move.to.col] = board[move.from.row][move.from.col];
+            board[move.from.row][move.from.col] = '';
+
+            // إذا كانت ترقية، نرقّي إلى وزير
+            if (move.promotion) {
+                board[move.to.row][move.to.col] = 'q';
+            }
+        }
+
+        // تقييم الموقف
+        const moveValue = evaluateBoard();
+
+        // للمستويات الأعلى، يمكن إضافة بحث أعمق
+        if (depth > 2) {
+            // ننظر إلى رد فعل اللاعب
+            gameState.currentPlayer = 'white';
+            const whiteMoves = getAllPossibleMoves('white');
+            let worstReplyValue = Infinity;
+
+            for (const replyMove of whiteMoves) {
+                // تنفيذ الرد مؤقتاً
+                const replyOriginalBoard = JSON.parse(JSON.stringify(board));
+
+                board[replyMove.to.row][replyMove.to.col] = board[replyMove.from.row][replyMove.from.col];
+                board[replyMove.from.row][replyMove.from.col] = '';
+
+                if (replyMove.promotion) {
+                    board[replyMove.to.row][replyMove.to.col] = 'Q';
+                }
+
+                const replyValue = evaluateBoard();
+                if (replyValue < worstReplyValue) {
+                    worstReplyValue = replyValue;
+                }
+
+                // التراجع عن الرد
+                board = JSON.parse(JSON.stringify(replyOriginalBoard));
+            }
+
+            if (whiteMoves.length > 0) {
+                moveValue += worstReplyValue * 0.5;
+            }
+
+            gameState.currentPlayer = 'black';
+        }
+
+        // التراجع عن الحركة
+        board = JSON.parse(JSON.stringify(originalBoard));
+        gameState = JSON.parse(JSON.stringify(originalState));
+
+        // تحديث أفضل حركة
+        if (moveValue > bestValue) {
+            bestValue = moveValue;
+            bestMove = move;
+        }
+    }
+
+    return bestMove || possibleMoves[0];
+    }
+
+        // تقييم اللوحة (بسيط)
+        function evaluateBoard() {
+    let value = 0;
+    const pieceValues = {
+        'p': -1,
+        'n': -3,
+        'b': -3,
+        'r': -5,
+        'q': -9,
+        'k': 0,
+        'P': 1,
+        'N': 3,
+        'B': 3,
+        'R': 5,
+        'Q': 9,
+        'K': 0
+    };
+
+    for (let row = 0; row < 8; row++) {
+        for (let col = 0; col < 8; col++) {
+            const piece = board[row][col];
+            if (piece !== '') {
+                value += pieceValues[piece];
+            }
+        }
+    }
+
+    return value;
+    }
+
+        // الحصول على جميع الحركات الممكنة للاعب معين
+        function getAllPossibleMoves(player) {
+    const moves = [];
+
+    for (let fromRow = 0; fromRow < 8; fromRow++) {
+        for (let fromCol = 0; fromCol < 8; fromCol++) {
+            const piece = board[fromRow][fromCol];
+
+            if (piece !== '' && ((player === 'white' && piece === piece.toUpperCase()) ||
+                (player === 'black' && piece === piece.toLowerCase()))) {
+                const pieceMoves = getPossibleMovesForPiece(fromRow, fromCol, player === 'white');
+
+                for (const move of pieceMoves) {
+                    // تنفيذ الحركة مؤقتاً للتحقق من عدم تعريض الملك للكش
+                    const originalPiece = board[move.to.row][move.to.col];
+                    board[move.to.row][move.to.col] = board[fromRow][fromCol];
+                    board[fromRow][fromCol] = '';
+
+                    const originalKingPos = player === 'white' ?
+                    {
+                        ...gameState.kingPos.white
+                    }: {
+                        ...gameState.kingPos.black
+                    };
+
+                    if (piece.toLowerCase() === 'k') {
+                        if (player === 'white') {
+                            gameState.kingPos.white = {
+                                row: move.to.row,
+                                col: move.to.col
+                            };
+                        } else {
+                            gameState.kingPos.black = {
+                                row: move.to.row,
+                                col: move.to.col
+                            };
+                        }
+                    }
+
+                    const isLegal = !isKingInCheck(player);
+
+                    // التراجع عن الحركة
+                    board[fromRow][fromCol] = board[move.to.row][move.to.col];
+                    board[move.to.row][move.to.col] = originalPiece;
+
+                    if (piece.toLowerCase() === 'k') {
+                        if (player === 'white') {
+                            gameState.kingPos.white = originalKingPos;
+                        } else {
+                            gameState.kingPos.black = originalKingPos;
+                        }
+                    }
+
+                    if (isLegal) {
+                        moves.push({
+                            from: {
+                                row: fromRow, col: fromCol
+                            },
+                            to: {
+                                row: move.to.row, col: move.to.col
+                            },
+                            castle: move.castle || false,
+                            promotion: (piece.toLowerCase() === 'p' &&
+                                ((player === 'white' && move.to.row === 0) ||
+                                    (player === 'black' && move.to.row === 7)))
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // إضافة حركات التبييت إذا كانت قانونية
+    if (player === 'white' && gameState.canCastle.white.kingside) {
+        if (board[7][5] === '' && board[7][6] === '' &&
+            !isSquareAttacked(7, 4, 'black') &&
+            !isSquareAttacked(7, 5, 'black') &&
+            !isSquareAttacked(7, 6, 'black')) {
+            moves.push({
+                from: {
+                    row: 7, col: 4
+                },
+                to: {
+                    row: 7, col: 6
+                },
+                castle: true
+            });
+        }
+    }
+
+    if (player === 'white' && gameState.canCastle.white.queenside) {
+        if (board[7][3] === '' && board[7][2] === '' && board[7][1] === '' &&
+            !isSquareAttacked(7, 4, 'black') &&
+            !isSquareAttacked(7, 3, 'black') &&
+            !isSquareAttacked(7, 2, 'black')) {
+            moves.push({
+                from: {
+                    row: 7, col: 4
+                },
+                to: {
+                    row: 7, col: 2
+                },
+                castle: true
+            });
+        }
+    }
+
+    if (player === 'black' && gameState.canCastle.black.kingside) {
+        if (board[0][5] === '' && board[0][6] === '' &&
+            !isSquareAttacked(0, 4, 'white') &&
+            !isSquareAttacked(0, 5, 'white') &&
+            !isSquareAttacked(0, 6, 'white')) {
+            moves.push({
+                from: {
+                    row: 0, col: 4
+                },
+                to: {
+                    row: 0, col: 6
+                },
+                castle: true
+            });
+        }
+    }
+
+    if (player === 'black' && gameState.canCastle.black.queenside) {
+        if (board[0][3] === '' && board[0][2] === '' && board[0][1] === '' &&
+            !isSquareAttacked(0, 4, 'white') &&
+            !isSquareAttacked(0, 3, 'white') &&
+            !isSquareAttacked(0, 2, 'white')) {
+            moves.push({
+                from: {
+                    row: 0, col: 4
+                },
+                to: {
+                    row: 0, col: 2
+                },
+                castle: true
+            });
+        }
+    }
+
+    return moves;
+    }
+
+        // الحصول على الحركات الممكنة لقطعة معينة
+        function getPossibleMovesForPiece(row, col, isWhite) {
+    const piece = board[row][col].toLowerCase();
+    const moves = [];
+
+    if (piece === 'p') {
+        // بيادق
+        const direction = isWhite ? -1: 1;
+        const startRow = isWhite ? 6: 1;
+
+        // حركة واحدة للأمام
+        if (isValidSquare(row + direction, col) && board[row + direction][col] === '') {
+            moves.push({
+                to: {
+                    row: row + direction, col: col
+                }
+            });
+
+            // حركتان للأمام من المربع الأول
+            if (row === startRow && board[row + 2 * direction][col] === '') {
+                moves.push({
+                    to: {
+                        row: row + 2 * direction, col: col
+                    }
+                });
+            }
+        }
+
+        // الأكل قطرياً
+        const captureDirections = [[direction,
+            -1],
+            [direction,
+                1]];
+        for (const [dr, dc] of captureDirections) {
+            const newRow = row + dr;
+            const newCol = col + dc;
+
+            if (isValidSquare(newRow, newCol)) {
+                // الأكل العادي
+                if (board[newRow][newCol] !== '' &&
+                    ((isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) ||
+                        (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                    moves.push({
+                        to: {
+                            row: newRow, col: newCol
+                        }
+                    });
+                }
+
+                // الأخذ بالتجاوز
+                if (gameState.enPassantTarget &&
+                    newRow === gameState.enPassantTarget.row &&
+                    newCol === gameState.enPassantTarget.col) {
+                    moves.push({
+                        to: {
+                            row: newRow, col: newCol
+                        }
+                    });
+                }
+            }
+        }
+    } else if (piece === 'n') {
+        // حصان
+        const knightMoves = [
+            [-2,
+                -1],
+            [-2,
+                1],
+            [-1,
+                -2],
+            [-1,
+                2],
+            [1,
+                -2],
+            [1,
+                2],
+            [2,
+                -1],
+            [2,
+                1]
+        ];
+
+        for (const [dr, dc] of knightMoves) {
+            const newRow = row + dr;
+            const newCol = col + dc;
+
+            if (isValidSquare(newRow, newCol) &&
+                (board[newRow][newCol] === '' ||
+                    (isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) ||
+                    (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                moves.push({
+                    to: {
+                        row: newRow, col: newCol
+                    }
+                });
+            }
+        }
+    } else if (piece === 'b') {
+        // فيل
+        const bishopDirections = [[-1,
+            -1],
+            [-1,
+                1],
+            [1,
+                -1],
+            [1,
+                1]];
+        checkSlidingMoves(row, col, bishopDirections, moves, isWhite);
+    } else if (piece === 'r') {
+        // قلعة
+        const rookDirections = [[-1,
+            0],
+            [1,
+                0],
+            [0,
+                -1],
+            [0,
+                1]];
+        checkSlidingMoves(row, col, rookDirections, moves, isWhite);
+    } else if (piece === 'q') {
+        // وزير
+        const queenDirections = [
+            [-1,
+                -1],
+            [-1,
+                1],
+            [1,
+                -1],
+            [1,
+                1],
+            [-1,
+                0],
+            [1,
+                0],
+            [0,
+                -1],
+            [0,
+                1]
+        ];
+        checkSlidingMoves(row, col, queenDirections, moves, isWhite);
+    } else if (piece === 'k') {
+        // ملك
+        const kingMoves = [
+            [-1,
+                -1],
+            [-1,
+                0],
+            [-1,
+                1],
+            [0,
+                -1],
+            [0,
+                1],
+            [1,
+                -1],
+            [1,
+                0],
+            [1,
+                1]
+        ];
+
+        for (const [dr, dc] of kingMoves) {
+            const newRow = row + dr;
+            const newCol = col + dc;
+
+            if (isValidSquare(newRow, newCol) &&
+                (board[newRow][newCol] === '' ||
+                    (isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) ||
+                    (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase()))) {
+                moves.push({
+                    to: {
+                        row: newRow, col: newCol
+                    }
+                });
+            }
+        }
+    }
+
+    return moves;
+    }
+
+        // التحقق من الحركات المنزلقة (للقلعة، الفيل، الوزير)
+        function checkSlidingMoves(row, col, directions, moves, isWhite) {
+    for (const [dr, dc] of directions) {
+        let newRow = row + dr;
+        let newCol = col + dc;
+
+        while (isValidSquare(newRow, newCol)) {
+            if (board[newRow][newCol] === '') {
+                moves.push({
+                    to: {
+                        row: newRow, col: newCol
+                    }
+                });
+            } else {
+                if ((isWhite && board[newRow][newCol] === board[newRow][newCol].toLowerCase()) ||
+                    (!isWhite && board[newRow][newCol] === board[newRow][newCol].toUpperCase())) {
+                    moves.push({
+                        to: {
+                            row: newRow, col: newCol
+                        }
+                    });
+                }
+                break;
+            }
+
+            newRow += dr;
+            newCol += dc;
+        }
+    }
+    }
+
+        // التحقق من أن المربع ضمن حدود اللوحة
+        function isValidSquare(row, col) {
+    return row >= 0 && row < 8 && col >= 0 && col < 8;
+    }
+
+        // إظهار الحركات الممكنة على اللوحة
+        function showPossibleMoves(row, col) {
+    const piece = board[row][col];
+    const isWhite = piece === piece.toUpperCase();
+    const moves = getPossibleMovesForPiece(row, col, isWhite);
+
+    for (const move of moves) {
+        const toRow = move.to.row;
+        const toCol = move.to.col;
+
+        // التحقق من أن الحركة لا تعرض الملك للكش
+        const originalPiece = board[toRow][toCol];
+        board[toRow][toCol] = board[row][col];
+        board[row][col] = '';
+
+        const originalKingPos = isWhite ?
+        {
+            ...gameState.kingPos.white
+        }: {
+            ...gameState.kingPos.black
+        };
+
+        if (piece.toLowerCase() === 'k') {
+            if (isWhite) {
+                gameState.kingPos.white = {
+                    row: toRow,
+                    col: toCol
+                };
+            } else {
+                gameState.kingPos.black = {
+                    row: toRow,
+                    col: toCol
+                };
+            }
+        }
+
+        const isLegal = !isKingInCheck(isWhite ? 'white': 'black');
+
+        // التراجع عن الحركة
+        board[row][col] = board[toRow][toCol];
+        board[toRow][toCol] = originalPiece;
+
+        if (piece.toLowerCase() === 'k') {
+            if (isWhite) {
+                gameState.kingPos.white = originalKingPos;
+            } else {
+                gameState.kingPos.black = originalKingPos;
+            }
+        }
+
+        if (isLegal) {
+            const square = document.querySelector(`.square[data-row="${toRow}"][data-col="${toCol}"]`);
+            square.classList.add('possible-move');
+
+            if (board[toRow][toCol] !== '') {
+                square.classList.add('capture-move');
+            }
+        }
+    }
+
+    // إظهار حركات التبييت إذا كانت متاحة
+    if (piece.toLowerCase() === 'k') {
+        const player = isWhite ? 'white': 'black';
+
+        // تبييت قصير
+        if (gameState.canCastle[player].kingside) {
+            const kingCol = isWhite ? 4: 4;
+            const rookCol = 7;
+            const emptyCol1 = isWhite ? 5: 5;
+            const emptyCol2 = isWhite ? 6: 6;
+
+            if (board[row][emptyCol1] === '' && board[row][emptyCol2] === '' &&
+                !isSquareAttacked(row, kingCol, isWhite ? 'black': 'white') &&
+                !isSquareAttacked(row, emptyCol1, isWhite ? 'black': 'white') &&
+                !isSquareAttacked(row, emptyCol2, isWhite ? 'black': 'white')) {
+
+                const square = document.querySelector(`.square[data-row="${row}"][data-col="${emptyCol2}"]`);
+                square.classList.add('possible-move');
+            }
+        }
+
+        // تبييت طويل
+        if (gameState.canCastle[player].queenside) {
+            const kingCol = isWhite ? 4: 4;
+            const rookCol = 0;
+            const emptyCol1 = isWhite ? 3: 3;
+            const emptyCol2 = isWhite ? 2: 2;
+            const emptyCol3 = isWhite ? 1: 1;
+
+            if (board[row][emptyCol1] === '' && board[row][emptyCol2] === '' && board[row][emptyCol3] === '' &&
+                !isSquareAttacked(row, kingCol, isWhite ? 'black': 'white') &&
+                !isSquareAttacked(row, emptyCol1, isWhite ? 'black': 'white') &&
+                !isSquareAttacked(row, emptyCol2, isWhite ? 'black': 'white')) {
+
+                const square = document.querySelector(`.square[data-row="${row}"][data-col="${emptyCol2}"]`);
+                square.classList.add('possible-move');
+            }
+        }
+    }
+    }
+
+        // التحقق إذا كان الملك في كش
+        function isKingInCheck(player) {
+    const kingPos = player === 'white' ? gameState.kingPos.white: gameState.kingPos.black;
+    return isSquareAttacked(kingPos.row, kingPos.col, player === 'white' ? 'black': 'white');
+    }
+
+        // التحقق إذا كان المربع معرض للهجوم من قبل الخصم
+        function isSquareAttacked(row, col, byPlayer) {
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const piece = board[r][c];
+
+            if (piece !== '' && ((byPlayer === 'white' && piece === piece.toUpperCase()) ||
+                (byPlayer === 'black' && piece === piece.toLowerCase()))) {
+                const moves = getPossibleMovesForPiece(r, c, byPlayer === 'white');
+
+                for (const move of moves) {
+                    if (move.to.row === row && move.to.col === col) {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
+    }
+
+        // التحقق من كش مات
+        function isCheckmate(player) {
+    if (!isKingInCheck(player)) return false;
+
+    const moves = getAllPossibleMoves(player);
+    return moves.length === 0;
+    }
+
+        // التحقق من التعادل
+        function isStalemate(player) {
+    if (isKingInCheck(player)) return false;
+
+    const moves = getAllPossibleMoves(player);
+    if (moves.length > 0) return false;
+
+    // التعادل بسبب عدم وجود حركات ممكنة (وليس كش)
+    return true;
+    }
+
+        // تمييز المربع
+        function highlightSquare(row, col, isSelected) {
+    const square = document.querySelector(`.square[data-row="${row}"][data-col="${col}"]`);
+    if (isSelected) {
+        square.classList.add('selected');
+    } else {
+        square.classList.add('possible-move');
+    }
+    }
+
+        // مسح التمييز
+        function clearHighlights() {
+    document.querySelectorAll('.selected, .possible-move, .capture-move').forEach(el => {
+        el.classList.remove('selected', 'possible-move', 'capture-move');
+    });
+    }
+
+        // التحقق إذا كانت القطعة للاعب الحالي
+        function isCurrentPlayerPiece(piece) {
+    return (gameState.currentPlayer === 'white' && piece === piece.toUpperCase()) ||
+    (gameState.currentPlayer === 'black' && piece === piece.toLowerCase());
+    }
+
+        // تحديث معلومات اللعبة
+        function updateGameInfo() {
+    let infoText = `دور ${gameState.currentPlayer === 'white' ? 'الأبيض': 'الأسود'}`;
+
+    if (gameState.check) {
+        infoText += ' (كش!)';
+    }
+
+    infoDisplay.textContent = infoText;
+    }
+
+        // تحديث سجل الحركات
+        function updateMoveHistory() {
+    moveHistoryDisplay.innerHTML = '';
+
+    for (let i = 0; i < gameState.moveHistory.length; i += 2) {
+        const moveDiv = document.createElement('div');
+
+        const whiteMove = gameState.moveHistory[i];
+        const blackMove = gameState.moveHistory[i + 1];
+
+        let moveText = `${i / 2 + 1}. ${whiteMove.notation}`;
+        if (blackMove) {
+            moveText += ` ${blackMove.notation}`;
+        }
+
+        moveDiv.textContent = moveText;
+        moveHistoryDisplay.appendChild(moveDiv);
+    }
+
+    moveHistoryDisplay.scrollTop = moveHistoryDisplay.scrollHeight;
+    }
+
+        // الحصول على ترميز الحركة
+        function getMoveNotation(fromRow, fromCol, toRow, toCol, isCapture) {
+    const piece = board[fromRow][fromCol];
+    const pieceType = piece.toLowerCase();
+    let notation = '';
+
+    // إذا لم تكن بيادق، نضيف رمز القطعة
+    if (pieceType !== 'p') {
+        notation = piece.toUpperCase();
+    }
+
+    // إذا كانت أكل، نضيف x
+    if (isCapture && pieceType === 'p') {
+        notation += String.fromCharCode(97 + fromCol);
+    }
+
+    if (isCapture) {
+        notation += 'x';
+    }
+
+    // إضافة المربع الهدف
+    notation += String.fromCharCode(97 + toCol) + (8 - toRow);
+
+    return notation;
+    }
+
+        // إعادة اللعبة
+        document.getElementById('resetBtn').addEventListener('click', () => {
+    board = [
+        ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+        ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+        ['', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', ''],
+        ['', '', '', '', '', '', '', ''],
+        ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+        ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+    ];
+
+    gameState = {
+        selectedSquare: null,
+        currentPlayer: 'white',
+        moveHistory: [],
+        kingPos: {
+            white: {
+                row: 7,
+                col: 4
+            },
+            black: {
+                row: 0,
+                col: 4
+            }
+        },
+        canCastle: {
+            white: {
+                kingside: true,
+                queenside: true
+            },
+            black: {
+                kingside: true,
+                queenside: true
+            }
+        },
+        enPassantTarget: null,
+        halfMoveClock: 0,
+        fullMoveNumber: 1,
+        check: false,
+        checkmate: false,
+        stalemate: false,
+        promotionPending: false,
+        promotionSquare: null
+    };
+
+    createBoard();
+    });
+
+        // التراجع عن الحركة
+        document.getElementById('undoBtn').addEventListener('click', () => {
+    if (gameState.moveHistory.length === 0) return;
+
+    // التراجع عن حركتين (واحدة لكل لاعب)
+    for (let i = 0; i < 2 && gameState.moveHistory.length > 0; i++) {
+        const lastMove = gameState.moveHistory.pop();
+
+        // التراجع عن الحركة
+        board[lastMove.from.row][lastMove.from.col] = lastMove.piece;
+        board[lastMove.to.row][lastMove.to.col] = lastMove.captured;
+
+        // تحديث موضع الملك إذا كان الملك قد تحرك
+        if (lastMove.piece.toLowerCase() === 'k') {
+            if (gameState.currentPlayer === 'white') {
+                gameState.kingPos.white = {
+                    row: lastMove.from.row,
+                    col: lastMove.from.col
+                };
+            } else {
+                gameState.kingPos.black = {
+                    row: lastMove.from.row,
+                    col: lastMove.from.col
+                };
+            }
+        }
+
+        // التراجع عن التبييت
+        if (lastMove.castle) {
+            const isKingside = lastMove.to.col > lastMove.from.col;
+
+            if (isKingside) {
+                board[lastMove.to.row][7] = board[lastMove.to.row][lastMove.to.col - 1];
+                board[lastMove.to.row][lastMove.to.col - 1] = '';
+            } else {
+                board[lastMove.to.row][0] = board[lastMove.to.row][lastMove.to.col + 1];
+                board[lastMove.to.row][lastMove.to.col + 1] = '';
+            }
+        }
+
+        // التراجع عن الأخذ بالتجاوز
+        if (lastMove.enPassant) {
+            const capturedPawnRow = lastMove.player === 'white' ? lastMove.to.row + 1: lastMove.to.row - 1;
+            board[capturedPawnRow][lastMove.to.col] = 'p';
+        }
+
+        // تبديل اللاعب
+        gameState.currentPlayer = lastMove.player;
+
+        // تحديث عداد الحركات
+        if (gameState.currentPlayer === 'black') {
+            gameState.fullMoveNumber--;
+        }
+    }
+
+    // إعادة تعيين حالة اللعبة
+    gameState.check = false;
+    gameState.checkmate = false;
+    gameState.stalemate = false;
+    gameState.promotionPending = false;
+    gameState.promotionSquare = null;
+
+    createBoard();
+    });
+
+        // بدء اللعبة
+        createBoard();
+</script>
+</body>
+</html>
